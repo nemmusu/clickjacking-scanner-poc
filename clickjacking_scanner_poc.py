@@ -16,7 +16,11 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException, NoSuchFrameException, TimeoutException
+from selenium.common.exceptions import (
+    WebDriverException,
+    NoSuchFrameException,
+    TimeoutException
+)
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -101,27 +105,49 @@ POC_TEMPLATE = """<!DOCTYPE html>
 
 def read_config():
     config = configparser.ConfigParser()
-    config.read('config.ini')
-    webdriver_path = config.get('settings', 'webdriver_path', fallback='chromedriver')
+    config.read("config.ini")
+    webdriver_path = config.get("settings", "webdriver_path", fallback="chromedriver")
     return webdriver_path
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description="Clickjacking POC Tester - Avanzato (controllo JS framebusting, barra progresso in tempo reale)"
+        description="Advanced Clickjacking POC Tester"
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-u", "--url", help="Specifica una singola URL da testare.")
-    group.add_argument("-f", "--file-list", help="Specifica un file con una lista di URL (una per riga).")
-    parser.add_argument("-o", "--output", default='output/', help="Cartella di output (default: output/).")
-    parser.add_argument("-v", "--verbose", action='store_true', help="Output dettagliato.")
-    parser.add_argument("-d", "--driver-path", help="Percorso del ChromeDriver (sovrascrive config.ini).")
-    parser.add_argument("-t", "--threads", type=int, default=1, help="Numero di thread (default=1).")
+    group.add_argument(
+        "-u", "--url",
+        help="Specifies a single URL to test."
+    )
+    group.add_argument(
+        "-f", "--file-list",
+        help="Specifies a file containing a list of URLs (one per line)."
+    )
+    parser.add_argument(
+        "-o", "--output",
+        default="output/",
+        help="Output directory (default: output/)."
+    )
+    parser.add_argument(
+        "-v", "--verbose",
+        action="store_true",
+        help="Enable detailed output."
+    )
+    parser.add_argument(
+        "-d", "--driver-path",
+        help="Path to the ChromeDriver binary (overrides config.ini)."
+    )
+    parser.add_argument(
+        "-t", "--threads",
+        type=int,
+        default=1,
+        help="Number of threads to use (default=1)."
+    )
     return parser.parse_args()
 
 def get_domain(url):
     parsed = urlparse(url)
     domain = parsed.netloc
-    if domain.startswith('www.'):
+    if domain.startswith("www."):
         domain = domain[4:]
     return domain
 
@@ -132,16 +158,16 @@ def save_poc(html_content, output_dir, domain):
     domain_dir = Path(output_dir) / domain
     domain_dir.mkdir(parents=True, exist_ok=True)
     poc_path = domain_dir / f"poc_{domain}.html"
-    with open(poc_path, 'w', encoding='utf-8') as f:
+    with open(poc_path, "w", encoding="utf-8") as f:
         f.write(html_content)
     return poc_path
 
 def check_headers_for_protection(headers):
-    xfo = headers.get('X-Frame-Options', '').lower()
-    csp = headers.get('Content-Security-Policy', '').lower()
-    if 'deny' in xfo or 'sameorigin' in xfo:
+    xfo = headers.get("X-Frame-Options", "").lower()
+    csp = headers.get("Content-Security-Policy", "").lower()
+    if "deny" in xfo or "sameorigin" in xfo:
         return True
-    if 'frame-ancestors' in csp and ("'none'" in csp or "none" in csp):
+    if "frame-ancestors" in csp and ("'none'" in csp or "none" in csp):
         return True
     return False
 
@@ -162,6 +188,7 @@ def load_poc_and_check_iframe(poc_path, driver_path, victim_url):
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
+
     random_uid = str(uuid.uuid4())[:8]
     user_data_path = f"/tmp/chrome_data_{random_uid}"
     chrome_options.add_argument(f"--user-data-dir={user_data_path}")
@@ -177,8 +204,6 @@ def load_poc_and_check_iframe(poc_path, driver_path, victim_url):
         driver.get(f"file://{os.path.abspath(poc_path)}")
         time.sleep(2)
 
-        # Prima di far controlli JS, verifichiamo se a livello di HEADERS è bloccato
-        # (Se vogliamo ottimizzare, potremmo fare 'is_framable(victim_url)' ancor prima di lanciare Selenium)
         if not is_framable(victim_url):
             driver.quit()
             return False
@@ -190,7 +215,6 @@ def load_poc_and_check_iframe(poc_path, driver_path, victim_url):
             driver.quit()
             return False
 
-        # Adesso aspettiamo che il body sia presente (fino a 10 secondi)
         try:
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
@@ -199,11 +223,8 @@ def load_poc_and_check_iframe(poc_path, driver_path, victim_url):
             driver.quit()
             return False
 
-        # Facciamo un breve sleep extra per vedere se un JS tardivo fa frame-bust
         time.sleep(3)
 
-        # Controllo se riesco ancora a trovare un body
-        # Se la pagina fosse stata "bustata" dal JS, di solito salterà un NoSuchElement
         try:
             driver.find_element(By.TAG_NAME, "body")
             can_switch = True
@@ -221,7 +242,7 @@ def process_single_url(url, output_dir, verbose, driver_path):
     domain = get_domain(url)
     poc_html = generate_poc(url)
 
-    with tempfile.NamedTemporaryFile('w', suffix='.html', delete=False) as tmpfile:
+    with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as tmpfile:
         tmpfile_name = tmpfile.name
         tmpfile.write(poc_html)
 
@@ -247,7 +268,7 @@ def process_single_url(url, output_dir, verbose, driver_path):
 
 def process_url_list(file_path, output_dir, verbose, driver_path, threads):
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             urls = [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
         print(f"Error: file '{file_path}' not found.")
