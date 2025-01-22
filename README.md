@@ -27,7 +27,7 @@ This Python script provides **advanced testing for Clickjacking vulnerabilities*
 
 1. **Clone this repository**:
    ```bash
-   git clone https://github.com/your-repo/clickjacking-scanner-poc.git
+   git clone https://github.com/nemmusu/clickjacking-scanner-poc.git
    cd clickjacking-scanner-poc
    ```
 
@@ -116,7 +116,7 @@ No vulnerable sites found.
 ## Notes
 
 - Ensure that **ChromeDriver** matches your installed **Google Chrome/Chromium** version.
-- You can download the matching ChromeDriver from the [official site](https://chromedriver.chromium.org/downloads).
+- You can download the matching ChromeDriver from the [official site](https://chromedriver.storage.googleapis.com/index.html).
 - The script saves **Proof-of-Concept HTML files** in the output folder (default `output/`) for any vulnerable site.
 
 ---
