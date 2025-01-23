@@ -86,9 +86,9 @@ When you run the script, it will read `webdriver_path` from `config.ini` if no `
 
 ## Example Output
 
-### Command:
+### Command (verbose):
 ```bash
-python clickjacking_scanner.py --file-list urls.txt --threads 5
+python clickjacking_scanner.py --file-list urls.txt --threads 5 --verbose
 ```
 (assuming `webdriver_path` is set in `config.ini`)
 
@@ -107,6 +107,26 @@ Total sites to test: 3
 [NOT VULNERABLE] https://www.google.com
 [NOT VULNERABLE] https://example.com
 [NOT VULNERABLE] https://safe-site.com
+Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
+No vulnerable sites found.
+```
+
+### Command :
+```bash
+python clickjacking_scanner.py --file-list urls.txt --threads 5 
+```
+(assuming `webdriver_path` is set in `config.ini`)
+
+### Output:
+```
+Total sites to test: 3
+[VULNERABLE] https://vulnerable-site.com
+Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
+```
+
+If no sites are found vulnerable:
+```
+Total sites to test: 3
 Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
 No vulnerable sites found.
 ```
