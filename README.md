@@ -86,7 +86,7 @@ When you run the script, it will read `webdriver_path` from `config.ini` if no `
 
 ## Example Output
 
-### Command (verbose):
+### Command (verbose output):
 ```bash
 python clickjacking_scanner.py --file-list urls.txt --threads 5 --verbose
 ```
@@ -111,7 +111,7 @@ Processing: 100%|█████████████████████
 No vulnerable sites found.
 ```
 
-### Command :
+### Command (minimal output):
 ```bash
 python clickjacking_scanner.py --file-list urls.txt --threads 5 
 ```

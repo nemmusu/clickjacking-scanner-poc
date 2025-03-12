@@ -183,11 +183,13 @@ def is_framable(url):
 def load_poc_and_check_iframe(poc_path, driver_path, victim_url):
     caps = DesiredCapabilities.CHROME.copy()
     caps["goog:loggingPrefs"] = {"performance": "ALL"}
-
+    caps["acceptInsecureCerts"] = True
+    
     chrome_options = Options()
     chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--ignore-certificate-errors")
 
     random_uid = str(uuid.uuid4())[:8]
     user_data_path = f"/tmp/chrome_data_{random_uid}"
