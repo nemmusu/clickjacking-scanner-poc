@@ -100,6 +100,11 @@ python clickjacking_scanner_poc.py --file-list urls.txt --screenshot
   ```
 
 ---
+## Example Screenshot
+
+Below is an example of a generated POC screenshot, where the vulnerable site is embedded within an iframe, and the URL bar is partially censored while remaining highlighted.
+
+![Example Screenshot](img/poc_screenshot.png)
 
 ## Template Customization
 
