@@ -91,7 +91,7 @@ POC_TEMPLATE = """<!DOCTYPE html>
 <body>
     <div class="description">
         <h2>Clickjacking Vulnerability POC</h2>
-        <p>This vulnerability presents a security risk, allowing for potential manipulation<br> of user interactions and unauthorized data access without user consent.</p>
+        <p>This proof‑of‑concept demonstrates a clickjacking vulnerability, enabling unauthorized interaction and data access.</p>
     </div>
     <div class="container">
         <iframe src="{victim_url}"></iframe>
@@ -107,15 +107,15 @@ def read_config():
     return cfg.get("settings", "webdriver_path", fallback="chromedriver")
 
 def parse_arguments():
-    p = argparse.ArgumentParser(description="Clickjacking POC tester con gestione redirect")
-    grp = p.add_mutually_exclusive_group(required=True)
-    grp.add_argument("-u", "--url", help="Singolo URL")
-    grp.add_argument("-f", "--file-list", help="File con lista URL")
-    p.add_argument("-o", "--output", default="output/", help="Cartella output")
-    p.add_argument("-v", "--verbose", action="store_true")
-    p.add_argument("-d", "--driver-path", help="Override ChromeDriver path")
-    p.add_argument("-t", "--threads", type=int, default=1)
-    return p.parse_args()
+    parser = argparse.ArgumentParser(description="Clickjacking POC tester with redirect handling")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-u", "--url", help="Specify a single URL to test")
+    group.add_argument("-f", "--file-list", help="Specify a file containing a list of URLs (one per line)")
+    parser.add_argument("-o", "--output", default="output/", help="Output directory (default: output/)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("-d", "--driver-path", help="Override path to ChromeDriver")
+    parser.add_argument("-t", "--threads", type=int, default=1, help="Number of threads to use (default: 1)")
+    return parser.parse_args()
 
 def resolve_redirect(url):
     try:
@@ -134,18 +134,21 @@ def is_framable(url):
             return False
         xfo = r.headers.get("X-Frame-Options", "").lower()
         csp = r.headers.get("Content-Security-Policy", "").lower()
-        if "deny" in xfo or "sameorigin" in xfo or "frame-ancestors" in csp:
-            return False
-        return True
+        return not ("deny" in xfo or "sameorigin" in xfo or "frame-ancestors" in csp)
     except requests.RequestException:
         return False
 
-def generate_and_save_poc(url, output_dir):
-    domain = urlparse(url).netloc.replace("www.", "")
-    html = POC_TEMPLATE.format(victim_url=url)
+def generate_and_save_poc(dest_url, orig_url, output_dir):
+    domain = urlparse(dest_url).netloc.replace("www.", "")
+    html = POC_TEMPLATE.format(victim_url=dest_url)
     path = Path(output_dir) / domain
     path.mkdir(parents=True, exist_ok=True)
-    poc_file = path / f"poc_{domain}.html"
+
+    filename = f"poc_{domain}.html"
+    if orig_url and orig_url.rstrip("/") != dest_url.rstrip("/"):
+        filename = f"poc_redirect_{domain}.html"
+
+    poc_file = path / filename
     poc_file.write_text(html, encoding="utf-8")
     return poc_file
 
@@ -163,48 +166,35 @@ def test_clickjacking(victim_url, driver_path, visited=None):
     opts.add_argument("--headless=new")
     opts.add_argument("--no-sandbox")
     opts.add_argument("--ignore-certificate-errors")
-
     caps = DesiredCapabilities.CHROME.copy()
     caps["acceptInsecureCerts"] = True
     for cap, val in caps.items():
         opts.set_capability(cap, val)
 
-    driver = webdriver.Chrome(service=ChromeService(executable_path=driver_path),options=opts)
+    driver = webdriver.Chrome(service=ChromeService(executable_path=driver_path), options=opts)
     tmp = tempfile.NamedTemporaryFile("w", suffix=".html", delete=False)
     tmp.write(POC_TEMPLATE.format(victim_url=victim_url))
     tmp.close()
 
     try:
         driver.get(f"file://{tmp.name}")
-        iframe = WebDriverWait(driver,5).until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
+        iframe = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.TAG_NAME, "iframe")))
         driver.switch_to.frame(iframe)
 
-        start = time.time()
-        loaded_time = None
-        timeout = 5
-        stable_wait = 1
-
-        while time.time() - start < timeout:
+        deadline = time.time() + 5
+        while time.time() < deadline:
             try:
                 current = driver.execute_script("return window.location.href")
             except WebDriverException:
                 return False
 
-            # Se cambia URL → segue redirect
             if current.rstrip("/") != victim_url.rstrip("/"):
                 driver.quit()
                 return test_clickjacking(current, driver_path, visited)
 
-            state = driver.execute_script("return document.readyState")
-            if state == "complete":
-                if loaded_time is None:
-                    loaded_time = time.time()
-                elif time.time() - loaded_time >= stable_wait:
-                    return True
-
             time.sleep(0.2)
 
-        return False
+        return True
 
     except (TimeoutException, NoSuchFrameException, WebDriverException):
         return False
@@ -217,12 +207,14 @@ def test_clickjacking(victim_url, driver_path, visited=None):
             pass
 
 def process_url(url, output_dir, driver_path, verbose):
-    final = resolve_redirect(url)
-    if final != url and verbose:
-        print(f"[REDIRECT] {url} → {final}")
-    if test_clickjacking(final, driver_path):
-        poc = generate_and_save_poc(final, output_dir)
-        return f"[VULNERABLE] {final}"
+    orig = url
+    dest = resolve_redirect(orig)
+    vuln = test_clickjacking(dest, driver_path)
+    if vuln:
+        generate_and_save_poc(dest, orig, output_dir)
+        if orig.rstrip("/") != dest.rstrip("/"):
+            return f"[VULNERABLE] {dest} [redirected from] {orig}"
+        return f"[VULNERABLE] {dest}"
     return None
 
 def main():
@@ -231,14 +223,15 @@ def main():
     Path(args.output).mkdir(exist_ok=True)
     targets = [args.url] if args.url else Path(args.file_list).read_text().split()
 
-    results = []
+    found = False
     for url in targets:
-        out = process_url(url.strip(), args.output, driver, args.verbose)
-        if out:
-            print(out)
-            results.append(out)
-    if not results:
-        print("Nessun sito vulnerabile trovato.")
+        result = process_url(url.strip(), args.output, driver, args.verbose)
+        if result:
+            print(result)
+            found = True
+
+    if not found:
+        print("No vulnerable sites found.")
 
 if __name__ == "__main__":
     main()
