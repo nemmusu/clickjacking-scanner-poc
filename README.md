@@ -1,17 +1,17 @@
-# Clickjacking Scanner and POC 
+# Clickjacking Scanner and POC
 
-This Python script provides **advanced testing for Clickjacking vulnerabilities** on one or more websites. It also detects JavaScript-based frame-busting. The script uses **Chrome in headless mode**, **Selenium**, and a **progress bar** (`tqdm`) to display the testing status in real-time.
+This Python script now provides **enhanced testing for Clickjacking vulnerabilities** on one or more websites. It can also capture **automatic screenshots** of the generated POC, highlighting the URL bar with a red box and partially censoring it (leaving only the final segments). The script uses **Chrome** (headless or otherwise) via **Selenium**, plus a **progress bar** (`tqdm`) to show status.
 
 ---
 
 ## Features
 
-- **HTTP Header Analysis**: Checks if the site uses headers like `X-Frame-Options` or `Content-Security-Policy` to block embedding.
-- **JavaScript Frame-Busting Detection**: Identifies if JavaScript attempts to break or redirect the iframe after it loads.
-- **POC Generation**: Creates an HTML file for each vulnerable site to demonstrate the Clickjacking attack.
-- **Multithreading**: Tests multiple sites concurrently to speed up the process.
-- **Progress Bar**: Provides real-time feedback with `tqdm`.
-- **Detailed Output**: Displays vulnerable and non-vulnerable results. Shows “No vulnerable sites found.” if none are vulnerable.
+- **HTTP Header Analysis**: Checks if a site uses `X-Frame-Options`, `Content-Security-Policy`, or other relevant mechanisms (including certain JavaScript frame-busting methods) to prevent embedding.
+- **POC Generation**: Creates an HTML file for each vulnerable site to demonstrate the Clickjacking attack. The file is based on a customizable `template.html`; just insert `{victim_url}` wherever you want the target URL to appear.
+- **Automatic Screenshot Option (`-s`)**: Captures screenshots of the generated POC, draws a red rectangle around the URL bar, and **partially blurs** the address. Only the last two path segments remain visible.
+- **OCR‑Based Editing**: Uses Tesseract to dynamically locate and censor the URL bar in the screenshot.
+- **Progress Bar**: Provides real-time feedback on the scanning progress. (via `tqdm`).
+- **Multithreading**: Optionally run tests in parallel (though `-s` can’t be used with multi-threading).
 
 ---
 
@@ -19,125 +19,100 @@ This Python script provides **advanced testing for Clickjacking vulnerabilities*
 
 ### Prerequisites
 
-- Python 3.7+
-- Google Chrome/Chromium
-- ChromeDriver matching your Chrome/Chromium version
+- **Python 3.7+**
+- **Google Chrome/Chromium**
+- **ChromeDriver** matching your Chrome version
+- **Tesseract** OCR installed on your system (e.g., `sudo apt-get install tesseract-ocr`)
 
-### Install Dependencies
+### Install Python Dependencies
 
-1. **Clone this repository**:
-   ```bash
-   git clone https://github.com/nemmusu/clickjacking-scanner-poc.git
-   cd clickjacking-scanner-poc
-   ```
-
-2. **Install required Python libraries**:
+1. **Clone** this repository (or download it). Then:
    ```bash
    pip install -r requirements.txt
    ```
-
-3. **ChromeDriver path**:
-   - You can specify it in **`config.ini`**, under `[settings] webdriver_path`.
-   - Or pass it directly to the script via the `--driver-path` option.
-   - If neither is set, the script defaults to `chromedriver`.
+   The `requirements.txt` should contain:
+   ```
+   selenium
+   requests
+   tqdm
+   configparser
+   pillow
+   pytesseract
+   ```
+2. **Set up ChromeDriver**
+   - Edit `config.ini` under `[settings] webdriver_path = /path/to/chromedriver`.
+   - Or pass `--driver-path /path/to/chromedriver`.
 
 ---
 
 ## Usage
 
-### Basic Commands
-
-- **Single URL Test**:
-  ```bash
-  python clickjacking_scanner.py --url https://example.com
-  ```
-  If you have `webdriver_path` in `config.ini`, no additional arguments are needed. Otherwise, pass `--driver-path /path/to/chromedriver`.
-  
-- **Multiple URLs from a File**:
-  ```bash
-  python clickjacking_scanner.py --file-list urls.txt
-  ```
-
-- **Output Results to a Specific Folder**:
-  ```bash
-  python clickjacking_scanner.py --file-list urls.txt --output results/
-  ```
-
-- **Enable Verbose Mode**:
-  ```bash
-  python clickjacking_scanner.py --url https://example.com --verbose
-  ```
-
-- **Multithreaded Testing**:
-  ```bash
-  python clickjacking_scanner.py --file-list urls.txt --threads 5
-  ```
-
-### Config File Example
-
-Edit the config file `config.ini` in the same directory with:
+### Single URL
+```bash
+python clickjacking_scanner_poc.py --url https://example.com
 ```
-[settings]
-webdriver_path = /path/to/chromedriver
+
+### Multiple URLs
+```bash
+python clickjacking_scanner_poc.py --file-list urls.txt
 ```
-When you run the script, it will read `webdriver_path` from `config.ini` if no `--driver-path` is provided. If both are missing, the script attempts to call `chromedriver` directly.
+
+### Output to a Specific Folder
+```bash
+python clickjacking_scanner_poc.py --file-list urls.txt --output results/
+```
+
+### Verbose Mode
+```bash
+python clickjacking_scanner_poc.py --url https://example.com --verbose
+```
+
+### Multithreading
+```bash
+python clickjacking_scanner_poc.py --file-list urls.txt --threads 5
+```
+(`-s` cannot be used with `--threads > 1`)
+
+### Screenshots with Partial Censorship
+```bash
+python clickjacking_scanner_poc.py --file-list urls.txt --screenshot
+```
+If vulnerable, the script generates a POC HTML and **captures a screenshot** of it. Tesseract is used to detect and blur the URL bar, highlighting it with a red rectangle but leaving the last two path segments in clear text.
 
 ---
 
 ## Example Output
 
-### Command (verbose output):
 ```bash
-python clickjacking_scanner.py --file-list urls.txt --threads 5 --verbose
-```
-(assuming `webdriver_path` is set in `config.ini`)
-
-### Output:
-```
-Total sites to test: 3
-[NOT VULNERABLE] https://www.google.com
-[NOT VULNERABLE] https://example.com
-[VULNERABLE] https://vulnerable-site.com
-Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
+python clickjacking_scanner_poc.py --file-list urls.txt --screenshot
 ```
 
-If no sites are found vulnerable:
-```
-Total sites to test: 3
-[NOT VULNERABLE] https://www.google.com
-[NOT VULNERABLE] https://example.com
-[NOT VULNERABLE] https://safe-site.com
-Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
-No vulnerable sites found.
-```
+- If a site is vulnerable:
+  ```
+  [VULNERABLE] https://vulnerable-example.com
+  Screenshot saved: output/vulnerable-example.com__root/screenshot_vulnerable-example.com__root.png
+  Scanning URLs: 100%|███████████████| 3/3 [00:15<00:00,  5.00s/url]
+  ```
 
-### Command (minimal output):
-```bash
-python clickjacking_scanner.py --file-list urls.txt --threads 5 
-```
-(assuming `webdriver_path` is set in `config.ini`)
+- If no vulnerable site is found:
+  ```
+  No vulnerable sites found.
+  ```
 
-### Output:
-```
-Total sites to test: 3
-[VULNERABLE] https://vulnerable-site.com
-Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
-```
+---
 
-If no sites are found vulnerable:
-```
-Total sites to test: 3
-Processing: 100%|████████████████████████████████████████████████| 3/3 [00:15<00:00,  5.00s/site]
-No vulnerable sites found.
-```
+## Template Customization
+
+- The default template is `template.html`. Inside it, place `{victim_url}` where you want the target site to appear.
+- You can customize styles or text, as long as `{victim_url}` remains to let the script inject the site.
 
 ---
 
 ## Notes
 
-- Ensure that **ChromeDriver** matches your installed **Google Chrome/Chromium** version.
-- You can download the matching ChromeDriver from the [official site](https://chromedriver.storage.googleapis.com/index.html).
-- The script saves **Proof-of-Concept HTML files** in the output folder (default `output/`) for any vulnerable site.
-
----
+- **ChromeDriver** must match your **Chrome**/Chromium version.
+- **Tesseract** must be installed for the partial censorship screenshot feature.
+- By default, results and POC files go into `output/`.
+- If you do not pass `--screenshot`, the script only performs the vulnerability tests and prints the results, without capturing screenshots.
+- `-s` is incompatible with `--threads > 1`.
 

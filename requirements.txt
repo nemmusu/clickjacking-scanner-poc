@@ -1,4 +1,6 @@
-selenium
 requests
-tqdm
+selenium
 configparser
+tqdm
+pillow
+pytesseract
